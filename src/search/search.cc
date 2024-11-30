@@ -375,7 +375,6 @@ void KernelGraphGenerator::generate_kernel_graphs() {
   std::vector<SerializedSearchContext> middle_states;
   std::vector<SerializedSearchContext> proc_own_middle_states;
   start_time = std::chrono::steady_clock::now();
-
   int global_total_random_tests = 0;
   int global_valid_kernel_graphs = 0;
   int global_total_states = 0;
@@ -385,29 +384,26 @@ void KernelGraphGenerator::generate_kernel_graphs() {
   MPI_Comm_rank(MPI_COMM_WORLD, &pid);
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
 
-  if (pid == 0) {
-    SearchContext c;
-    c.level = SearchLevel::LV_KERNEL;
-    c.kn_graph = std::make_shared<kernel::Graph>();
-    
-    for (auto const &input_attr : computation_graph_input_attrs) {
-        auto [dim, data_type, layout] = input_attr;
-        c.kn_graph->new_input(dim, data_type, layout);
-    }
-    
-    generate_next_operator(
-      c,
-      [this](SearchContext const &c) {
-        return c.tb_graph != nullptr || this->verify(*c.kn_graph);
-      },
-      middle_states);
+  SearchContext c;
+  c.level = SearchLevel::LV_KERNEL;
+  c.kn_graph = std::make_shared<kernel::Graph>();
+  
+  for (auto const &input_attr : computation_graph_input_attrs) {
+      auto [dim, data_type, layout] = input_attr;
+      c.kn_graph->new_input(dim, data_type, layout);
+  }
+  
+  generate_next_operator(
+    c,
+    [this](SearchContext const &c) {
+      return c.tb_graph != nullptr || this->verify(*c.kn_graph);
+    },
+    middle_states);
 
+  if (pid == 0) {
     printf("\n");
     printf("[Search] First step finished. Time elapsed: %lfsec\n", get_elapsed_time_in_sec());
   }
-
-  // communicate middle states array to processors
-  MPI_Bcast()
 
   for (size_t  i = pid; i < middle_states.size(); i += nproc) {
     proc_own_middle_states.push_back(middle_states[i]);
@@ -419,8 +415,6 @@ void KernelGraphGenerator::generate_kernel_graphs() {
   MPI_Reduce(&num_total_random_tests, &global_total_random_tests, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   MPI_Reduce(&num_valid_kernel_graphs, &global_valid_kernel_graphs, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   MPI_Reduce(&num_total_states, &global_total_states, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-
-  // communicate found mugraphs back to root
 
   if (pid == 0) {
     save_results();
@@ -437,7 +431,7 @@ void KernelGraphGenerator::generate_kernel_graphs() {
           global_valid_kernel_graphs);
   }
 
-
+  MPI_Finalize();
 }
 
 void KernelGraphGenerator::preprocess(kernel::Graph const &computation_graph) {
