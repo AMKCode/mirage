@@ -370,76 +370,74 @@ void KernelGraphGenerator::search_from(
   }
 }
 
-void dummy_mpi() {
-    // Initialize the MPI environment
-    MPI_Init(nullptr, nullptr);
-
-    // Get the rank of the process
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    // Get the number of processes
-    int size;
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-    // Print a message from each process
-    std::cout << "Hello, World from process " << rank 
-              << " out of " << size << " processes!" << std::endl;
-
-    // Finalize the MPI environment
-    MPI_Finalize();
-}
-
 void KernelGraphGenerator::generate_kernel_graphs() {
-  dummy_mpi();
-
-  start_time = std::chrono::steady_clock::now();
-  SearchContext c;
-  c.level = SearchLevel::LV_KERNEL;
-  c.kn_graph = std::make_shared<kernel::Graph>();
-
-  for (auto const &input_attr : computation_graph_input_attrs) {
-    auto [dim, data_type, layout] = input_attr;
-    c.kn_graph->new_input(dim, data_type, layout);
-  }
-
+  int pid, nproc;
   std::vector<SerializedSearchContext> middle_states;
-  generate_next_operator(
+  std::vector<SerializedSearchContext> proc_own_middle_states;
+  start_time = std::chrono::steady_clock::now();
+
+  int global_total_random_tests = 0;
+  int global_valid_kernel_graphs = 0;
+  int global_total_states = 0;
+
+  MPI_Init(nullptr, nullptr);
+
+  MPI_Comm_rank(MPI_COMM_WORLD, &pid);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+
+  if (pid == 0) {
+    SearchContext c;
+    c.level = SearchLevel::LV_KERNEL;
+    c.kn_graph = std::make_shared<kernel::Graph>();
+    
+    for (auto const &input_attr : computation_graph_input_attrs) {
+        auto [dim, data_type, layout] = input_attr;
+        c.kn_graph->new_input(dim, data_type, layout);
+    }
+    
+    generate_next_operator(
       c,
       [this](SearchContext const &c) {
         return c.tb_graph != nullptr || this->verify(*c.kn_graph);
       },
       middle_states);
-  printf("\n");
-  printf("[Search] First step finished. Time elapsed: %lfsec\n",
-         get_elapsed_time_in_sec());
-  std::vector<std::vector<SerializedSearchContext>> split_middle_states(
-      num_thread);
-  for (size_t i = 0; i < middle_states.size(); ++i) {
-    split_middle_states[i % num_thread].push_back(middle_states[i]);
+
+    printf("\n");
+    printf("[Search] First step finished. Time elapsed: %lfsec\n", get_elapsed_time_in_sec());
   }
 
-  std::vector<std::thread> threads;
-  for (int i = 0; i < num_thread; ++i) {
-    threads.push_back(std::thread(
-        &KernelGraphGenerator::search_from, this, split_middle_states[i]));
-  }
-  for (auto &thread : threads) {
-    thread.join();
+  // communicate middle states array to processors
+  MPI_Bcast()
+
+  for (size_t  i = pid; i < middle_states.size(); i += nproc) {
+    proc_own_middle_states.push_back(middle_states[i]);
   }
 
-  save_results();
+  search_from(proc_own_middle_states);
 
-  printf("\n");
-  printf("[Search] Second step finished. Time elapsed: %fsec\n",
-         std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                       start_time)
-             .count());
-  printf("[Search] Total states explored: %d\n", num_total_states.load());
-  printf("[Search] Random tests performed: %d\n",
-         num_total_random_tests.load());
-  printf("[Serach] Valid kernel graphs explored: %d\n",
-         num_valid_kernel_graphs.load());
+  // communicate each processor's info back to root
+  MPI_Reduce(&num_total_random_tests, &global_total_random_tests, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&num_valid_kernel_graphs, &global_valid_kernel_graphs, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&num_total_states, &global_total_states, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+  // communicate found mugraphs back to root
+
+  if (pid == 0) {
+    save_results();
+
+    printf("\n");
+    printf("[Search] Second step finished. Time elapsed: %fsec\n",
+          std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                        start_time)
+              .count());
+    printf("[Search] Total states explored: %d\n", global_total_states);
+    printf("[Search] Random tests performed: %d\n",
+          global_total_random_tests);
+    printf("[Serach] Valid kernel graphs explored: %d\n",
+          global_valid_kernel_graphs);
+  }
+
+
 }
 
 void KernelGraphGenerator::preprocess(kernel::Graph const &computation_graph) {
@@ -561,9 +559,9 @@ double KernelGraphGenerator::get_elapsed_time_in_sec() const {
 void KernelGraphGenerator::show_statistics() const {
   printf(
       "[Search] States: %d, Random tests: %d, Valid mugraphs: %d, Time: %lf\r",
-      num_total_states.load(),
-      num_total_random_tests.load(),
-      num_valid_kernel_graphs.load(),
+      num_total_states,
+      num_total_random_tests,
+      num_valid_kernel_graphs,
       get_elapsed_time_in_sec());
 }
 

@@ -42,9 +42,9 @@ private:
       computation_graph_input_attrs;
 
   // Statistics-related fields
-  std::atomic<int> num_total_random_tests;
-  std::atomic<int> num_valid_kernel_graphs;
-  std::atomic<int> num_total_states;
+  int num_total_random_tests;
+  int num_valid_kernel_graphs;
+  int num_total_states;
 
   // Time  
   std::chrono::time_point<std::chrono::steady_clock> start_time;
