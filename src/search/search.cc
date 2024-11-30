@@ -7,6 +7,7 @@
 #include "mirage/utils/containers.h"
 #include "mirage/utils/json_utils.h"
 
+#include <mpi.h>
 #include <fstream>
 #include <iostream>
 #include <thread>
@@ -369,7 +370,29 @@ void KernelGraphGenerator::search_from(
   }
 }
 
+void dummy_mpi() {
+    // Initialize the MPI environment
+    MPI_Init(nullptr, nullptr);
+
+    // Get the rank of the process
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    // Get the number of processes
+    int size;
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    // Print a message from each process
+    std::cout << "Hello, World from process " << rank 
+              << " out of " << size << " processes!" << std::endl;
+
+    // Finalize the MPI environment
+    MPI_Finalize();
+}
+
 void KernelGraphGenerator::generate_kernel_graphs() {
+  dummy_mpi();
+
   start_time = std::chrono::steady_clock::now();
   SearchContext c;
   c.level = SearchLevel::LV_KERNEL;
@@ -395,6 +418,7 @@ void KernelGraphGenerator::generate_kernel_graphs() {
   for (size_t i = 0; i < middle_states.size(); ++i) {
     split_middle_states[i % num_thread].push_back(middle_states[i]);
   }
+
   std::vector<std::thread> threads;
   for (int i = 0; i < num_thread; ++i) {
     threads.push_back(std::thread(
