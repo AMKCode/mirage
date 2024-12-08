@@ -52,7 +52,7 @@ def config_cython():
         # MPI include and library paths (adapt as needed for your system)
         mpi_include = os.getenv("MPI_INCLUDE", "/usr/include/x86_64-linux-gnu/openmpi")  # Default MPI include path
         mpi_lib = os.getenv("MPI_LIB", "/usr/lib/x86_64-linux-gnu/openmpi/lib")  # Default MPI library path
-        mpi_libraries = ["mpi", "mpi_cxx"]  # Name of the MPI library
+        mpi_libraries = ["mpi"]  # Name of the MPI library
 
         with open("output.txt", "w") as file:
             file.write(mpi_include)
@@ -68,16 +68,16 @@ def config_cython():
                               path.join(mirage_path, "deps", "json", "include"),
                               path.join(mirage_path, "deps", "cutlass", "include"),
                               path.join(z3_path, "include"),
-                              "/usr/local/cuda/include",
-                              "/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi",
-                              "/usr/lib/x86_64-linux-gnu/openmpi/include"],
+                              "/opt/packages/cuda/v12.6.1/include",
+                              "/opt/packages/openmpi/gnu/5.0.3-gcc13.2.1-cpu/include/openmpi",
+                              "/opt/packages/openmpi/gnu/5.0.3-gcc13.2.1-cpu/include"],
                 libraries=["mirage_runtime", "cudadevrt", "cudart_static", "cudnn", "cublas", "cudart", "cuda", "z3", *mpi_libraries],
                 library_dirs=[path.join(mirage_path, "build"),
                               path.join(z3_path, "lib"),
-                              "/usr/local/cuda/lib",
-                              "/usr/local/cuda/lib64",
-                              "/usr/local/cuda/lib64/stubs",
-                              "/usr/lib/x86_64-linux-gnu/openmpi/lib"],
+                              "/opt/packages/cuda/v12.6.1/lib",
+                              "/opt/packages/cuda/v12.6.1/lib64",
+                              "/opt/packages/cuda/v12.6.1/lib64/stubs",
+                              "/opt/packages/openmpi/gnu/5.0.3-gcc13.2.1-cpu/lib"],
                 extra_compile_args=["-std=c++17", "-fpermissive"],
                 extra_link_args=["-fPIC"],
                 language="c++"))

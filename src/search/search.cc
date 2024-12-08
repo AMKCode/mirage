@@ -452,9 +452,9 @@ void KernelGraphGenerator::preprocess(kernel::Graph const &computation_graph) {
   target_ranges = get_interact_ranges(init_ranges, computation_graph);
   assert(init_ranges.size() == target_ranges.size());
 
-  for (auto const &op : computation_graph.operators) {
-    op->fingerprint();
-  }
+  // for (auto const &op : computation_graph.operators) {
+  //   op->fingerprint();
+  // }
 
   std::unordered_map<DTensor, int> num_consumers;
   for (kernel::KNOperator *op : computation_graph.operators) {
@@ -466,8 +466,8 @@ void KernelGraphGenerator::preprocess(kernel::Graph const &computation_graph) {
   for (kernel::KNOperator *op : computation_graph.operators) {
     for (DTensor const &output : op->output_tensors) {
       if (num_consumers[output] == 0) {
-        computation_graph_output_tensors.push_back(
-            output.copy_fingerprint_to_ctensor());
+        // computation_graph_output_tensors.push_back(
+        //     output.copy_fingerprint_to_ctensor());
         computation_graph_output_patterns.push_back(
             computation_graph_patterns.at(output.guid));
       }
@@ -500,9 +500,9 @@ bool KernelGraphGenerator::verify(kernel::Graph const &g) {
 
     ++num_total_random_tests;
 
-    for (auto const &op : g.operators) {
-      op->fingerprint();
-    }
+    // for (auto const &op : g.operators) {
+    //   op->fingerprint();
+    // }
 
     auto get_matches = [](int num_outputs) {
       std::vector<std::vector<int>> results;
@@ -517,10 +517,10 @@ bool KernelGraphGenerator::verify(kernel::Graph const &g) {
     };
 
     for (auto const &match : get_matches(outputs.size())) {
-      if (have_same_fingerprint(outputs, match)) {
+      // if (have_same_fingerprint(outputs, match)) {
         ++num_valid_kernel_graphs;
         return true;
-      }
+      // }
     }
   }
 
