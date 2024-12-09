@@ -379,6 +379,7 @@ void KernelGraphGenerator::generate_kernel_graphs() {
   int global_valid_kernel_graphs = 0;
   int global_total_states = 0;
 
+
   MPI_Init(nullptr, nullptr);
 
   MPI_Comm_rank(MPI_COMM_WORLD, &pid);
@@ -401,6 +402,7 @@ void KernelGraphGenerator::generate_kernel_graphs() {
     middle_states);
 
   if (pid == 0) {
+    config.show();
     printf("\n");
     printf("[Search] First step finished. Time elapsed: %lfsec\n", get_elapsed_time_in_sec());
   }
@@ -416,8 +418,36 @@ void KernelGraphGenerator::generate_kernel_graphs() {
   MPI_Reduce(&num_valid_kernel_graphs, &global_valid_kernel_graphs, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   MPI_Reduce(&num_total_states, &global_total_states, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
-  if (pid == 0) {
+  // send serialized graphs from generated_graphs of other processes to the root
+  if (pid != 0) {
+    int num_graphs = generated_graphs.size();
+    MPI_Send(&num_graphs, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    for (const auto &graph : generated_graphs) {
+      std::string serialized_graph = graph.dump();
+      
+      int graph_size = serialized_graph.size();
+      MPI_Send(&graph_size, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+      MPI_Send(serialized_graph.c_str(), graph_size, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+    }
+  } else {
+    for (int incoming_pid = 1; incoming_pid < nproc; incoming_pid++) {
+      int num_graphs;
+      MPI_Recv(&num_graphs, 1, MPI_INT, incoming_pid, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      for (int i = 0; i < num_graphs; i++) {
+        int graph_size;
+        MPI_Recv(&graph_size, 1, MPI_INT, incoming_pid, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        char *buf = new char[graph_size + 1];
+        MPI_Recv(buf, graph_size, MPI_CHAR, incoming_pid, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        buf[graph_size] = '\0';
+        generated_graphs.push_back(json::parse(buf));
+        delete[] buf;
+      }
+    }
+
     save_results();
+
+    std::cout << "generated_graphs.size() = " << generated_graphs.size() << std::endl;
 
     printf("\n");
     printf("[Search] Second step finished. Time elapsed: %fsec\n",

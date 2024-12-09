@@ -96,7 +96,7 @@ int cython_search(mirage::kernel::Graph const *input_graph,
     }
     search::KernelGraphGenerator gen(
         *input_graph, config, "mirage_search_checkpoint.json", verbose);
-    gen.config.show();
+    // gen.config.show();
     gen.generate_kernel_graphs();
     int num = 0;
     for (json const &j : gen.generated_graphs) {
