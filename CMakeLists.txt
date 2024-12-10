@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.24 FATAL_ERROR)
 project(MIRAGE LANGUAGES C CXX CUDA)
 
+set(CMAKE_C_COMPILER "/opt/packages/openmpi/gnu/5.0.3-gcc13.2.1-cpu/bin/mpicc")
+set(CMAKE_C_FLAGS "-I/usr/include -L/usr/lib")
+set(CMAKE_CXX_COMPILER "/opt/packages/openmpi/gnu/5.0.3-gcc13.2.1-cpu/bin/mpicxx")
+
+# Include and link directories from Conda
+include_directories("/usr/include")
+link_directories("/usr/lib")
+
 message(STATUS "CMake Version: ${CMAKE_VERSION}")
 
 if (EXISTS ${CMAKE_CURRENT_BINARY_DIR}/config.cmake)
@@ -33,6 +41,22 @@ file(GLOB_RECURSE MIRAGE_CUDA_SRCS
 
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-std=c++17" SUPPORT_CXX17)
+
+# Add MPI support
+find_package(MPI REQUIRED)
+
+if (MPI_FOUND)
+  message(STATUS "MPI found: ${MPI_C_COMPILER}")
+  include_directories(${MPI_INCLUDE_PATH})
+  set(MPI_COMPILE_FLAGS ${MPI_CXX_COMPILE_FLAGS})
+  set(MPI_LINK_FLAGS ${MPI_CXX_LINK_FLAGS})
+else()
+  message(FATAL_ERROR "MPI not found")
+endif()
+
+# Compile definitions
+add_definitions(${MPI_COMPILE_FLAGS})
+link_libraries(${MPI_LIBRARIES})
 
 #set CUDA version
 include(deps/cutlass/CUDA.cmake)

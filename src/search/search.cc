@@ -7,6 +7,7 @@
 #include "mirage/utils/containers.h"
 #include "mirage/utils/json_utils.h"
 
+#include <mpi.h>
 #include <fstream>
 #include <iostream>
 #include <thread>
@@ -380,50 +381,99 @@ void KernelGraphGenerator::generate_next_operator(
 }
 
 void KernelGraphGenerator::generate_kernel_graphs() {
+  int pid, nproc;
+  std::vector<SerializedSearchContext> middle_states;
+  std::vector<SerializedSearchContext> proc_own_middle_states;
   start_time = std::chrono::steady_clock::now();
+  int global_total_random_tests = 0;
+  int global_valid_kernel_graphs = 0;
+  int global_total_states = 0;
+
+
+  MPI_Init(nullptr, nullptr);
+
+  MPI_Comm_rank(MPI_COMM_WORLD, &pid);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+
   SearchContext c;
   c.level = SearchLevel::LV_KERNEL;
   c.kn_graph = std::make_shared<kernel::Graph>();
-
+  
   for (auto const &input_attr : computation_graph_input_attrs) {
     auto [dim, data_type, layout, strides] = input_attr;
     // FIXME: remove the layout attr since we use the strides
     // to describe the layout
     c.kn_graph->new_input(dim, strides, data_type, layout);
   }
+  
+  generate_next_operator(
+    c,
+    [this](SearchContext const &c) {
+      return c.tb_graph != nullptr || this->verify(*c.kn_graph);
+    },
+    middle_states);
 
-  std::vector<SerializedSearchContext> verified;
-
-  printf("num_thread = %d\n", num_thread);
-#pragma omp parallel num_threads(num_thread)
-  {
-#pragma omp single
-    {
-      generate_next_operator(
-          c,
-          [this](SearchContext const &c) {
-            return c.level == SearchLevel::LV_KERNEL &&
-                   this->verify(*c.kn_graph);
-          },
-          verified,
-          0);
-    }
+  if (pid == 0) {
+    config.show();
+    printf("\n");
+    printf("[Search] First step finished. Time elapsed: %lfsec\n", get_elapsed_time_in_sec());
   }
 
-  printf("num_tasks = %d tasks\n", num_tasks.load());
+  for (size_t  i = pid; i < middle_states.size(); i += nproc) {
+    proc_own_middle_states.push_back(middle_states[i]);
+  }
 
-  save_results();
+  search_from(proc_own_middle_states);
 
-  printf("\n");
-  printf("[Search] Second step finished. Time elapsed: %fsec\n",
-         std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                       start_time)
-             .count());
-  printf("[Search] Total states explored: %d\n", num_total_states.load());
-  printf("[Search] Random tests performed: %d\n",
-         num_total_random_tests.load());
-  printf("[Serach] Valid kernel graphs explored: %d\n",
-         num_valid_kernel_graphs.load());
+  // communicate each processor's info back to root
+  MPI_Reduce(&num_total_random_tests, &global_total_random_tests, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&num_valid_kernel_graphs, &global_valid_kernel_graphs, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&num_total_states, &global_total_states, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+  // send serialized graphs from generated_graphs of other processes to the root
+  if (pid != 0) {
+    int num_graphs = generated_graphs.size();
+    MPI_Send(&num_graphs, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    for (const auto &graph : generated_graphs) {
+      std::string serialized_graph = graph.dump();
+      
+      int graph_size = serialized_graph.size();
+      MPI_Send(&graph_size, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+      MPI_Send(serialized_graph.c_str(), graph_size, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+    }
+  } else {
+    for (int incoming_pid = 1; incoming_pid < nproc; incoming_pid++) {
+      int num_graphs;
+      MPI_Recv(&num_graphs, 1, MPI_INT, incoming_pid, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      for (int i = 0; i < num_graphs; i++) {
+        int graph_size;
+        MPI_Recv(&graph_size, 1, MPI_INT, incoming_pid, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        char *buf = new char[graph_size + 1];
+        MPI_Recv(buf, graph_size, MPI_CHAR, incoming_pid, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        buf[graph_size] = '\0';
+        generated_graphs.push_back(json::parse(buf));
+        delete[] buf;
+      }
+    }
+
+    save_results();
+
+    std::cout << "generated_graphs.size() = " << generated_graphs.size() << std::endl;
+
+    printf("\n");
+    printf("[Search] Second step finished. Time elapsed: %fsec\n",
+          std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                        start_time)
+              .count());
+    printf("[Search] Total states explored: %d\n", global_total_states);
+    printf("[Search] Random tests performed: %d\n",
+          global_total_random_tests);
+    printf("[Serach] Valid kernel graphs explored: %d\n",
+          global_valid_kernel_graphs);
+  }
+
+  MPI_Finalize();
 }
 
 void KernelGraphGenerator::preprocess(kernel::Graph const &computation_graph) {
@@ -445,9 +495,9 @@ void KernelGraphGenerator::preprocess(kernel::Graph const &computation_graph) {
   target_ranges = get_interact_ranges(init_ranges, computation_graph);
   assert(init_ranges.size() == target_ranges.size());
 
-  for (auto const &op : computation_graph.operators) {
-    op->fingerprint();
-  }
+  // for (auto const &op : computation_graph.operators) {
+  //   op->fingerprint();
+  // }
 
   for (kernel::KNOperator *op : computation_graph.operators) {
     if (op->op_type == type::KNOperatorType::KN_OUTPUT_OP) {
@@ -491,9 +541,10 @@ bool KernelGraphGenerator::verify(kernel::Graph &g) {
 
   ++num_total_random_tests;
 
-  for (auto const &op : g.operators) {
-    op->fingerprint();
-  }
+
+    // for (auto const &op : g.operators) {
+    //   op->fingerprint();
+    // }
 
     auto get_matches = [](int num_outputs) {
       std::vector<std::vector<int>> results;
@@ -563,9 +614,9 @@ double KernelGraphGenerator::get_elapsed_time_in_sec() const {
 void KernelGraphGenerator::show_statistics() const {
   printf(
       "[Search] States: %d, Random tests: %d, Valid mugraphs: %d, Time: %lf\r",
-      num_total_states.load(),
-      num_total_random_tests.load(),
-      num_valid_kernel_graphs.load(),
+      num_total_states,
+      num_total_random_tests,
+      num_valid_kernel_graphs,
       get_elapsed_time_in_sec());
 }
 

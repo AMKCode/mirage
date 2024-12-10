@@ -34,6 +34,13 @@ import z3
 z3_path = path.dirname(z3.__file__)
 print(f"Z3 path: {z3_path}", flush=True)
 
+# Ensure `mpicxx` is used as the C++ compiler
+os.environ["CC"] = "mpicc"
+os.environ["CXX"] = "mpicxx"
+os.environ['LD'] = '/usr/bin/ld'
+
+print(os.environ["PATH"])
+
 def config_cython():
     sys_cflags = sysconfig.get_config_var("CFLAGS")
     try:
@@ -41,6 +48,16 @@ def config_cython():
         ret = []
         mirage_path = ''
         cython_path = path.join(mirage_path, "python/mirage/_cython")
+
+        # MPI include and library paths (adapt as needed for your system)
+        mpi_include = os.getenv("MPI_INCLUDE", "/usr/include/x86_64-linux-gnu/openmpi")  # Default MPI include path
+        mpi_lib = os.getenv("MPI_LIB", "/usr/lib/x86_64-linux-gnu/openmpi/lib")  # Default MPI library path
+        mpi_libraries = ["mpi"]  # Name of the MPI library
+
+        with open("output.txt", "w") as file:
+            file.write(mpi_include)
+            file.write(mpi_lib)
+
         for fn in os.listdir(cython_path):
             if not fn.endswith(".pyx"):
                 continue
@@ -51,15 +68,18 @@ def config_cython():
                               path.join(mirage_path, "deps", "json", "include"),
                               path.join(mirage_path, "deps", "cutlass", "include"),
                               path.join(z3_path, "include"),
-                              "/usr/local/cuda/include"],
-                libraries=["mirage_runtime", "cudadevrt", "cudart_static", "cudnn", "cublas", "cudart", "cuda", "z3", "gomp"],
+                              "/opt/packages/cuda/v12.6.1/include",
+                              "/opt/packages/openmpi/gnu/5.0.3-gcc13.2.1-cpu/include/openmpi",
+                              "/opt/packages/openmpi/gnu/5.0.3-gcc13.2.1-cpu/include"],
+                libraries=["mirage_runtime", "cudadevrt", "cudart_static", "cudnn", "cublas", "cudart", "cuda", "z3", *mpi_libraries],
                 library_dirs=[path.join(mirage_path, "build"),
                               path.join(z3_path, "lib"),
-                              "/usr/local/cuda/lib",
-                              "/usr/local/cuda/lib64",
-                              "/usr/local/cuda/lib64/stubs"],
-                extra_compile_args=["-std=c++17", "-fopenmp"],
-                extra_link_args=["-fPIC", "-fopenmp"],
+                              "/opt/packages/cuda/v12.6.1/lib",
+                              "/opt/packages/cuda/v12.6.1/lib64",
+                              "/opt/packages/cuda/v12.6.1/lib64/stubs",
+                              "/opt/packages/openmpi/gnu/5.0.3-gcc13.2.1-cpu/lib"],
+                extra_compile_args=["-std=c++17", "-fpermissive"],
+                extra_link_args=["-fPIC"],
                 language="c++"))
         return cythonize(ret, compiler_directives={"language_level" : 3})
     except ImportError:
@@ -92,6 +112,7 @@ try:
                            '-DZ3_LIBRARIES=' + path.join(z3_path, 'lib', 'libz3.so'),
                            '-DCMAKE_C_COMPILER=' + os.environ['CC'],
                            '-DCMAKE_CXX_COMPILER=' + os.environ['CXX'],
+                           '-DCMAKE_LINKER=' + os.environ['LD'], 
                           ], cwd=build_dir, env=os.environ.copy())
     subprocess.check_call(['make', '-j'], cwd=build_dir, env=os.environ.copy())
     print("Mirage runtime library built successfully.")
