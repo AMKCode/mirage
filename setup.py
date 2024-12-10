@@ -93,18 +93,10 @@ try:
     mirage_path = path.dirname(__file__)
     # z3_path = os.path.join(mirage_path, 'deps', 'z3', 'build')
     # os.environ['Z3_DIR'] = z3_path
-    if mirage_path == '':
-        mirage_path = '.'
     os.makedirs(mirage_path, exist_ok=True)
     os.chdir(mirage_path)
     build_dir = os.path.join(mirage_path, 'build')
     
-    cc_path = shutil.which('gcc')
-    os.environ['CC'] = cc_path if cc_path else '/usr/bin/gcc'
-    cxx_path = shutil.which('g++')
-    os.environ['CXX'] = cxx_path if cxx_path else '/usr/bin/g++'
-    print(f"CC: {os.environ['CC']}, CXX: {os.environ['CXX']}", flush=True)
-  
     # Create the build directory if it does not exist
     os.makedirs(build_dir, exist_ok=True)
     subprocess.check_call(['cmake', '..', 

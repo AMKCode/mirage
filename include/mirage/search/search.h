@@ -63,11 +63,12 @@ private:
   std::vector<std::pair<size_t, IKNRange>> init_ranges;
   std::vector<std::vector<IKNRange>> target_ranges;
 
+  void search_from(std::vector<SerializedSearchContext> const &contexts);
+
   void generate_next_operator(
       SearchContext &c,
       std::function<bool(SearchContext const &)> const &verify,
-      std::vector<SerializedSearchContext> &verified,
-      size_t depth);
+      std::vector<SerializedSearchContext> &verified);
 
   void preprocess(kernel::Graph const &computation_graph);
   bool check_pattern(std::shared_ptr<AlgebraicPattern> pattern);

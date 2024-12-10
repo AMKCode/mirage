@@ -107,8 +107,7 @@ std::vector<typename GraphType::TensorType>
 void KernelGraphGenerator::generate_next_operator(
     SearchContext &c,
     std::function<bool(SearchContext const &)> const &verify,
-    std::vector<SerializedSearchContext> &verified,
-    size_t depth) {
+    std::vector<SerializedSearchContext> &verified) {
   ++num_total_states;
   if (num_total_states % 100 == 1) {
     show_statistics();
@@ -157,7 +156,7 @@ void KernelGraphGenerator::generate_next_operator(
           if (new_op) {
             c.kn_graph->operators.push_back(new_op);
             if (check_range(init_ranges, target_ranges, *c.kn_graph)) {
-                generate_next_operator(c, verify, verified, depth + 1);
+                generate_next_operator(c, verify, verified);
             }
             delete c.kn_graph->operators.back();
             c.kn_graph->operators.pop_back();
@@ -226,7 +225,7 @@ void KernelGraphGenerator::generate_next_operator(
                     }
                     if (input_created) {
                       c.level = SearchLevel::LV_THREADBLOCK;
-                        generate_next_operator(c, verify, verified, depth + 1);
+                        generate_next_operator(c, verify, verified);
                       c.level = SearchLevel::LV_KERNEL;
                     }
                     c.tb_graph = nullptr;
@@ -293,7 +292,7 @@ void KernelGraphGenerator::generate_next_operator(
         std::shared_ptr<threadblock::Graph> tb_graph = c.tb_graph;
         c.tb_graph = nullptr;
         if (check_range(init_ranges, target_ranges, *c.kn_graph)) {
-            generate_next_operator(c, verify, verified, depth + 1);
+            generate_next_operator(c, verify, verified);
         }
         c.tb_graph = tb_graph;
         c.level = SearchLevel::LV_THREADBLOCK;
@@ -338,12 +337,26 @@ void KernelGraphGenerator::generate_next_operator(
         };
         c.tb_graph->operators.push_back(new_op);
         if (check_range(init_ranges, target_ranges, *c.kn_graph, c.tb_graph)) {
-            generate_next_operator(c, verify, verified, depth + 1);
+            generate_next_operator(c, verify, verified);
         }
         delete c.tb_graph->operators.back();
         c.tb_graph->operators.pop_back();
       }
     }
+  }
+}
+
+void KernelGraphGenerator::search_from(
+    std::vector<SerializedSearchContext> const &contexts) {
+  for (auto const &sc : contexts) {
+    SearchContext c = sc.deserialize();
+    std::vector<SerializedSearchContext> verified;
+    generate_next_operator(
+        c,
+        [this](SearchContext const &c) {
+          return c.level == SearchLevel::LV_KERNEL && this->verify(*c.kn_graph);
+        },
+        verified);
   }
 }
 
