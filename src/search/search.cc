@@ -157,14 +157,7 @@ void KernelGraphGenerator::generate_next_operator(
           if (new_op) {
             c.kn_graph->operators.push_back(new_op);
             if (check_range(init_ranges, target_ranges, *c.kn_graph)) {
-              if (depth < max_depth) {
-                num_tasks++;
-                SearchContext c_tmp = SerializedSearchContext(c).deserialize();
-#pragma omp task
-                { generate_next_operator(c_tmp, verify, verified, depth + 1); }
-              } else {
                 generate_next_operator(c, verify, verified, depth + 1);
-              }
             }
             delete c.kn_graph->operators.back();
             c.kn_graph->operators.pop_back();
@@ -233,19 +226,7 @@ void KernelGraphGenerator::generate_next_operator(
                     }
                     if (input_created) {
                       c.level = SearchLevel::LV_THREADBLOCK;
-
-                      if (depth < max_depth) {
-                        num_tasks++;
-                        SearchContext c_tmp =
-                            SerializedSearchContext(c).deserialize();
-#pragma omp task
-                        {
-                          generate_next_operator(
-                              c_tmp, verify, verified, depth + 1);
-                        }
-                      } else {
                         generate_next_operator(c, verify, verified, depth + 1);
-                      }
                       c.level = SearchLevel::LV_KERNEL;
                     }
                     c.tb_graph = nullptr;
@@ -312,14 +293,7 @@ void KernelGraphGenerator::generate_next_operator(
         std::shared_ptr<threadblock::Graph> tb_graph = c.tb_graph;
         c.tb_graph = nullptr;
         if (check_range(init_ranges, target_ranges, *c.kn_graph)) {
-          if (depth < max_depth) {
-            num_tasks++;
-            SearchContext c_tmp = SerializedSearchContext(c).deserialize();
-#pragma omp task
-            { generate_next_operator(c_tmp, verify, verified, depth + 1); }
-          } else {
             generate_next_operator(c, verify, verified, depth + 1);
-          }
         }
         c.tb_graph = tb_graph;
         c.level = SearchLevel::LV_THREADBLOCK;
@@ -364,14 +338,7 @@ void KernelGraphGenerator::generate_next_operator(
         };
         c.tb_graph->operators.push_back(new_op);
         if (check_range(init_ranges, target_ranges, *c.kn_graph, c.tb_graph)) {
-          if (depth < max_depth) {
-            num_tasks++;
-            SearchContext c_tmp = SerializedSearchContext(c).deserialize();
-#pragma omp task
-            { generate_next_operator(c_tmp, verify, verified, depth + 1); }
-          } else {
             generate_next_operator(c, verify, verified, depth + 1);
-          }
         }
         delete c.tb_graph->operators.back();
         c.tb_graph->operators.pop_back();
@@ -501,8 +468,8 @@ void KernelGraphGenerator::preprocess(kernel::Graph const &computation_graph) {
 
   for (kernel::KNOperator *op : computation_graph.operators) {
     if (op->op_type == type::KNOperatorType::KN_OUTPUT_OP) {
-      computation_graph_output_tensors.push_back(
-          op->input_tensors[0].copy_fingerprint_to_ctensor());
+      // computation_graph_output_tensors.push_back(
+      //     op->input_tensors[0].copy_fingerprint_to_ctensor());
       computation_graph_output_patterns.push_back(
           computation_graph_patterns.at(op->input_tensors[0].guid));
     }
@@ -522,13 +489,11 @@ bool KernelGraphGenerator::check_pattern(
   for (auto const &final_pattern : computation_graph_output_patterns) {
     if (pattern->subpattern_to(*final_pattern)) {
 
-#pragma omp critical
-      { seen_patterns[pattern->to_string()] = true; }
+      seen_patterns[pattern->to_string()] = true;
       return true;
     }
   }
-#pragma omp critical
-  { seen_patterns[pattern->to_string()] = false; }
+  seen_patterns[pattern->to_string()] = false;
   return false;
 }
 
@@ -572,29 +537,28 @@ bool KernelGraphGenerator::verify(kernel::Graph &g) {
       }
     };
 
-  auto have_same_fingerprint = [&](std::vector<int> const &match) {
-    for (size_t i = 0; i < match.size(); ++i) {
-      if (!outputs[match[i]].has_same_fingerprint(
-              computation_graph_output_tensors[i])) {
-        return false;
-      }
-    }
-    return true;
-  };
+  // auto have_same_fingerprint = [&](std::vector<int> const &match) {
+  //   for (size_t i = 0; i < match.size(); ++i) {
+  //     if (!outputs[match[i]].has_same_fingerprint(
+  //             computation_graph_output_tensors[i])) {
+  //       return false;
+  //     }
+  //   }
+  //   return true;
+  // };
 
   auto save_graph = [&]() {
-#pragma omp critical
-    { generated_graphs.push_back(json(g)); }
+    generated_graphs.push_back(json(g));
   };
 
   for (auto const &match : get_matches(outputs.size())) {
-    if (have_same_fingerprint(match)) {
+    // if (have_same_fingerprint(match)) {
       ++num_valid_kernel_graphs;
       mark_outputs(match);
       save_graph();
       unmark_outputs(match);
       return true;
-    }
+    // }
   }
 
   return false;
