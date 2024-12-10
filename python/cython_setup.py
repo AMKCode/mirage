@@ -95,7 +95,7 @@ setup_args = {}
 #    }
 
 setup(name='mirage',
-      version="0.1.1",
+      version="0.2.2",
       description="Mirage: A Multi-Level Superoptimizer for Tensor Algebra",
       zip_safe=False,
       install_requires=[],

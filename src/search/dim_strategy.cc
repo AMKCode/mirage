@@ -32,7 +32,7 @@ std::vector<dim3>
 
   auto generate_1d_grids = [&](std::vector<int> const &dims) {
     std::vector<dim3> cands;
-    for (size_t x = 32; x <= 64; x *= 2) {
+    for (size_t x = 8; x <= 128; x *= 2) {
       for (int dim : dims) {
         if (dim % x == 0) {
           cands.push_back({dim / x, 1, 1});
@@ -97,7 +97,8 @@ std::vector<dim3>
   }
   cands = filter(cands, [](dim3 const &dim) {
     int num_threadblocks = dim.x * dim.y * dim.z;
-    return 32 <= num_threadblocks && num_threadblocks <= config::MAX_NUM_THREADBLOCKS_PER_KERNEL;
+    return 32 <= num_threadblocks &&
+           num_threadblocks <= config::MAX_NUM_THREADBLOCKS_PER_KERNEL;
   });
 
   cands = deduplicate(cands);

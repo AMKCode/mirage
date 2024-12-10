@@ -8,6 +8,12 @@ The quickest way to try Mirage is installing the latest stable release from pip:
 ```bash
 pip install mirage-project
 ```
+
+We also provide some pre-built binary wheels in the [Release Page](https://github.com/mirage-project/mirage/releases/latest). For example, to install mirage 0.2.2 compiled with CUDA 12.2 for python 3.10, using the following command:
+```bash
+pip install https://github.com/mirage-project/mirage/releases/download/v0.2.2/mirage_project-0.2.2+cu122-cp310-cp310-linux_x86_64.whl
+```
+
 You can also install Mirage from source code:
 ```bash
 git clone --recursive https://www.github.com/mirage-project/mirage
@@ -30,6 +36,10 @@ V = torch.matmul(U, W13)
 V1, V3 = V.chunk(2, -1) # split omitted in the above figure
 output = torch.matmul(silu(V1) * V3, W2) # silu and this matmul omitted in the above figure
 ```
+<p align="center">
+<img src="img/llama-3-8b-rms-norm-linear.png?raw=true" alt="Mirage generates kernels that fuses RMSNorm and Linear" height="280"/>
+</p>
+
 To accelerate Transformer computation, we can use Mirage to generate GPU kernels that fuse RMSNorm and Linear, as shown in the code snippet below. Generating optimized kernels only requires write a few lines of code to describe the desired computation. The `get_mirage_kernel` function below returns the best kernel discovered by Mirage. These kernels can directly run as functions in your PyTorch programs. This kernel is 1.5–1.7x faster than running the two operators separately in PyTorch.
 
 ```python

@@ -1,4 +1,4 @@
-/* Copyright 2023 CMU
+/* Copyright 2023-2024 CMU
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,71 +50,18 @@ KNOperator::KNOperator(Graph *_graph,
 
 KNOperator::~KNOperator() {}
 
-DTensor Graph::new_input(std::vector<int> const &dims,
-                         mirage::type::DataType data_type,
-                         mirage::layout::DmemLayout layout) {
-  KNOperator *op = create_input_op(dims, data_type, layout);
-  assert(op != nullptr);
-  operators.push_back(op);
-  return op->output_tensors[0];
-}
-
-DTensor *Graph::new_input_ptr(std::vector<int> const &dims,
-                              mirage::type::DataType data_type,
-                              mirage::layout::DmemLayout layout) {
-  KNOperator *op = create_input_op(dims, data_type, layout);
-  assert(op != nullptr);
-  operators.push_back(op);
-  return &op->output_tensors[0];
-}
-
-KNOperator *Graph::create_input_op(std::vector<int> const &dims,
-                                   mirage::type::DataType data_type,
-                                   mirage::layout::DmemLayout layout) {
-  DTensor tensor;
-  tensor.layout = layout;
-  tensor.num_dims = dims.size();
-  for (int i = tensor.num_dims - 1; i >= 0; i--) {
-    tensor.dim[i] = dims[i];
+int KNOperator::get_input_dtensors(DTensor **inputs) {
+  for (size_t i = 0; i < input_tensors.size(); ++i) {
+    inputs[i] = &input_tensors[i];
   }
-  tensor.data_type = data_type;
+  return input_tensors.size();
+}
 
-  if (!can_allocate(tensor)) {
-    return nullptr;
+int KNOperator::get_output_dtensors(DTensor **outputs) {
+  for (size_t i = 0; i < output_tensors.size(); ++i) {
+    outputs[i] = &output_tensors[i];
   }
-  KNInputOp *op = new KNInputOp(this, dims, data_type, layout);
-  return op;
+  return output_tensors.size();
 }
-
-KNInputOp::KNInputOp(Graph *_graph,
-                     std::vector<int> const &dims,
-                     mirage::type::DataType data_type,
-                     mirage::layout::DmemLayout layout,
-                     int3 _input_map)
-    : KNOperator(_graph, mirage::type::KN_INPUT_OP), input_map(_input_map) {
-  DTensor tensor;
-  tensor.num_dims = dims.size();
-  for (int i = tensor.num_dims - 1; i >= 0; i--) {
-    tensor.dim[i] = dims[i];
-  }
-  tensor.data_type = data_type;
-  tensor.layout = layout;
-  tensor.owner_op = this;
-  tensor.owner_ts_idx = 0;
-  tensor.guid = DTensor::next_guid++;
-  kgraph->allocate(tensor);
-  output_tensors.push_back(tensor);
-}
-
-KNInputOp::~KNInputOp() {
-  kgraph->free(output_tensors[0]);
-}
-
-KNInputOp::operator json() const {
-  return json{{"op_type", op_type},
-              {"input_tensors", input_tensors},
-              {"output_tensors", output_tensors}};
-}
-
 } // namespace kernel
 } // namespace mirage

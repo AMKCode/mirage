@@ -38,7 +38,10 @@ private:
   std::vector<std::shared_ptr<AlgebraicPattern>>
       computation_graph_output_patterns;
   std::vector<cpu::CTensor> computation_graph_output_tensors;
-  std::vector<std::tuple<std::vector<int>, type::DataType, layout::DmemLayout>>
+  std::vector<std::tuple<std::vector<int>,
+                         type::DataType,
+                         layout::DmemLayout,
+                         std::vector<size_t>>>
       computation_graph_input_attrs;
 
   // Statistics-related fields
@@ -46,34 +49,29 @@ private:
   int num_valid_kernel_graphs;
   int num_total_states;
 
-  // Time  
+  // Time
   std::chrono::time_point<std::chrono::steady_clock> start_time;
 
-  std::mutex fp_mutex;
-  std::mutex generated_graphs_mutex;
+  // count number of tasks
+  std::atomic<int> num_tasks;
+  size_t max_depth;
+
+  //
+  std::unordered_map<std::string, bool> seen_patterns;
 
   // Ranges-related fields
   std::vector<std::pair<size_t, IKNRange>> init_ranges;
   std::vector<std::vector<IKNRange>> target_ranges;
 
-  void search_from(std::vector<SerializedSearchContext> const &contexts);
-
   void generate_next_operator(
       SearchContext &c,
       std::function<bool(SearchContext const &)> const &verify,
-      std::vector<SerializedSearchContext> &verified);
-
-  bool create_threadblock_outputs(
-      SearchContext &c,
-      std::unordered_map<int64_t, std::shared_ptr<AlgebraicPattern>> const
-          &algebraic_pattern,
-      int3 output_map);
+      std::vector<SerializedSearchContext> &verified,
+      size_t depth);
 
   void preprocess(kernel::Graph const &computation_graph);
   bool check_pattern(std::shared_ptr<AlgebraicPattern> pattern);
-  bool have_same_fingerprint(std::vector<DTensor> const &outputs,
-                             std::vector<int> const &match) const;
-  bool verify(kernel::Graph const &g);
+  bool verify(kernel::Graph &g);
 
   void save_results() const;
   double get_elapsed_time_in_sec() const;
