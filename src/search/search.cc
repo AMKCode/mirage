@@ -402,14 +402,21 @@ void KernelGraphGenerator::generate_kernel_graphs() {
   for (size_t  i = pid; i < middle_states.size(); i += nproc) {
     proc_own_middle_states.push_back(middle_states[i]);
   }
+  z3_total_count = 0;
+  z3_cache_count = 0;
+  z3_time = std::chrono::duration<double>();
+  auto node_start_time = std::chrono::steady_clock::now();
 
+  printf("Starting own search %d\n", pid);
   search_from(proc_own_middle_states);
+  printf("Finished own search PID: %d, Total Time elapsed: %lfsec, Comp time elasped, %lfsec, Z3_total: %ld, Z3_cache_count: %ld, Z3_time: %lfsec\n", pid, get_elapsed_time_in_sec(), std::chrono::duration<double>(std::chrono::steady_clock::now() - node_start_time).count(), z3_total_count, z3_cache_count, z3_time.count());
 
   // communicate each processor's info back to root
   MPI_Reduce(&num_total_random_tests, &global_total_random_tests, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   MPI_Reduce(&num_valid_kernel_graphs, &global_valid_kernel_graphs, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   MPI_Reduce(&num_total_states, &global_total_states, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
+  printf("Waiting for other nodes: %d, Time elapsed: %lfsec\n", pid, get_elapsed_time_in_sec());
   // send serialized graphs from generated_graphs of other processes to the root
   if (pid != 0) {
     int num_graphs = generated_graphs.size();
@@ -436,6 +443,8 @@ void KernelGraphGenerator::generate_kernel_graphs() {
         delete[] buf;
       }
     }
+
+    printf("Done! PID: %d, Time elapsed: %lfsec\n", pid, get_elapsed_time_in_sec());
 
     save_results();
 
@@ -494,10 +503,14 @@ bool KernelGraphGenerator::check_pattern(
   if (!pattern) {
     return false;
   }
+  z3_total_count++;
 
   if (seen_patterns.find(pattern->to_string()) != seen_patterns.end()) {
+    z3_cache_count++;
     return seen_patterns[pattern->to_string()];
   }
+
+  auto start_z3_time = std::chrono::steady_clock::now();
 
   for (auto const &final_pattern : computation_graph_output_patterns) {
     if (pattern->subpattern_to(*final_pattern)) {
@@ -507,6 +520,9 @@ bool KernelGraphGenerator::check_pattern(
     }
   }
   seen_patterns[pattern->to_string()] = false;
+
+  z3_time = z3_time + std::chrono::duration<double>(std::chrono::steady_clock::now() - start_z3_time);
+
   return false;
 }
 

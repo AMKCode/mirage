@@ -51,6 +51,9 @@ private:
 
   // Time
   std::chrono::time_point<std::chrono::steady_clock> start_time;
+  std::chrono::duration<double> z3_time;
+  size_t z3_cache_count;
+  size_t z3_total_count;
 
   // count number of tasks
   std::atomic<int> num_tasks;
