@@ -85,6 +85,18 @@ PyMODINIT_FUNC PyInit___mirage_launcher(void) {
 }
 """
 
+dtype_map = {
+    'int8':    torch.int8,
+    'int16':   torch.int16,
+    'int32':   torch.int32,
+    'int64':   torch.int64,
+    'uint8':   torch.uint8, 
+    'fp16':    torch.float16,
+    'bf16':    torch.bfloat16,
+    'fp32':    torch.float32,
+    'fp64':    torch.float64
+}
+
 def get_cc_cmd(target, cc, FILE_NAME, py_include_dir, MIRAGE_ROOT, so_path):
     common_cmd = [
         cc,
@@ -197,6 +209,12 @@ class KNGraph:
     def gelu(self, A: DTensor):
         return self.cygraph.gelu(A)
 
+    def relu(self, A: DTensor):
+        return self.cygraph.relu(A)
+    
+    def clamp(self, A: DTensor, min_val: float, max_val: float):
+        return self.cygraph.clamp(A, min_val, max_val)
+
     def add(self, A: DTensor, B: DTensor):
         return self.cygraph.add(A, B)
 
@@ -231,7 +249,7 @@ class KNGraph:
 
         output_shapes = self._cached_results["output_shapes"]
         output_tensors = [
-            torch.zeros(shape, dtype=torch.float16, device=input_tensors[0].device) for shape in output_shapes
+            torch.zeros(shape, dtype=input_tensors[0].dtype, device=input_tensors[0].device) for shape in output_shapes
         ]
         if(verbose):
             print("Input tensors:")
@@ -266,7 +284,7 @@ class KNGraph:
                 meta["shape"],
                 meta["strides"],
                 device=input_tensors[0].device,
-                dtype=torch.float16,
+                dtype=input_tensors[0].dtype,
             )
             for meta in results["output_directives"]
         ]
@@ -438,7 +456,7 @@ class KNGraph:
                             for t in dtensors:
                                 dims = [t.dim(i) for i in range(t.num_dims)]
                                 input_tensors.append(
-                                    torch.randn(dims, dtype=torch.float16, device="cuda:0")
+                                    torch.randn(dims, dtype=dtype_map[str(t.dtype)], device="cuda:0")
                                 )
                             starter = torch.cuda.Event(enable_timing=True)
                             ender = torch.cuda.Event(enable_timing=True)
@@ -452,7 +470,7 @@ class KNGraph:
                     for t in dtensors:
                         dims = [t.dim(i) for i in range(t.num_dims)]
                         input_tensors.append(
-                            torch.randn(dims, dtype=torch.float16, device="cuda:0")
+                            torch.randn(dims, dtype=dtype_map[str(t.dtype)], device="cuda:0")
                         )
                     starter = torch.cuda.Event(enable_timing=True)
                     ender = torch.cuda.Event(enable_timing=True)
@@ -466,7 +484,7 @@ class KNGraph:
                 for t in dtensors:
                     dims = [t.dim(i) for i in range(t.num_dims)]
                     input_tensors.append(
-                        torch.randn(dims, dtype=torch.float16, device="cuda:0")
+                        torch.randn(dims, dtype=dtype_map[str(t.dtype)], device="cuda:0")
                     )
                 starter = torch.cuda.Event(enable_timing=True)
                 ender = torch.cuda.Event(enable_timing=True)
