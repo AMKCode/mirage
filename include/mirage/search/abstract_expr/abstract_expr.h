@@ -9,6 +9,16 @@
 #include <unordered_map>
 #include <unordered_set>
 
+extern "C" {
+
+struct KVPair {
+  int key;
+  bool value;
+};
+
+KVPair *egg_equiv(char const **inputs, int len);
+}
+
 namespace mirage {
 namespace search {
 
@@ -20,9 +30,10 @@ public:
   virtual z3::expr
       to_z3(z3::context &c,
             std::unordered_set<std::string> &all_variables) const = 0;
-  bool subpattern_to(AbstractExpr const &other) const;
-  bool operator==(AbstractExpr const &other) const;
+  std::vector<bool> subpattern_to(
+      std::vector<std::shared_ptr<AbstractExpr>> const &input_patterns) const;
   virtual std::string to_string() const = 0;
+  virtual std::string to_egg() const = 0;
 };
 
 class Var : public AbstractExpr {
@@ -31,6 +42,7 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   std::string name;
 };
 
@@ -40,6 +52,7 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   std::shared_ptr<AbstractExpr> lhs, rhs;
 };
 
@@ -49,6 +62,7 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   std::shared_ptr<AbstractExpr> lhs, rhs;
 };
 
@@ -58,6 +72,17 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
+  std::shared_ptr<AbstractExpr> lhs, rhs;
+};
+
+class Pow : public AbstractExpr {
+public:
+  Pow(std::shared_ptr<AbstractExpr> lhs, std::shared_ptr<AbstractExpr> rhs);
+  z3::expr to_z3(z3::context &c,
+                 std::unordered_set<std::string> &all_variables) const override;
+  std::string to_string() const override;
+  std::string to_egg() const override;
   std::shared_ptr<AbstractExpr> lhs, rhs;
 };
 
@@ -67,7 +92,28 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   std::shared_ptr<AbstractExpr> exponent;
+};
+
+class Square : public AbstractExpr {
+public:
+  Square(std::shared_ptr<AbstractExpr> a);
+  z3::expr to_z3(z3::context &c,
+                 std::unordered_set<std::string> &all_variables) const override;
+  std::string to_string() const override;
+  std::string to_egg() const override;
+  std::shared_ptr<AbstractExpr> a;
+};
+
+class Sqrt : public AbstractExpr {
+public:
+  Sqrt(std::shared_ptr<AbstractExpr> a);
+  z3::expr to_z3(z3::context &c,
+                 std::unordered_set<std::string> &all_variables) const override;
+  std::string to_string() const override;
+  std::string to_egg() const override;
+  std::shared_ptr<AbstractExpr> a;
 };
 
 class Silu : public AbstractExpr {
@@ -76,6 +122,7 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   std::shared_ptr<AbstractExpr> a;
 };
 
@@ -85,6 +132,7 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   std::shared_ptr<AbstractExpr> a;
 };
 
@@ -94,6 +142,7 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   std::shared_ptr<AbstractExpr> a;
 };
 
@@ -103,6 +152,7 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   float min_val;
   float max_val;
   std::shared_ptr<AbstractExpr> elems;
@@ -116,6 +166,7 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
+  std::string to_egg() const override;
   int red_deg;
   std::shared_ptr<AbstractExpr> elems;
 };
@@ -126,7 +177,8 @@ public:
   z3::expr to_z3(z3::context &c,
                  std::unordered_set<std::string> &all_variables) const override;
   std::string to_string() const override;
-  int red_deg_log;
+  std::string to_egg() const override;
+  int red_deg;
   std::shared_ptr<AbstractExpr> summand;
 };
 
